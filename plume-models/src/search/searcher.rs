@@ -16,6 +16,8 @@ use tantivy::{
     IndexWriter, ReloadPolicy, Term,
 };
 use whatlang::{detect as detect_lang, Lang};
+use futures::future;
+use std::thread;
 
 #[derive(Debug)]
 pub enum SearcherError {
@@ -132,8 +134,13 @@ impl Searcher {
         let mut writer = index
             .writer(50_000_000)
             .map_err(|_| SearcherError::WriteLockAcquisitionError)?;
-        let _ = writer
-            .garbage_collect_files();
+        thread::spawn(|| smol::run(future::pending::<()>()));
+        smol::block_on(async {
+            writer
+                .garbage_collect_files()
+                .await
+                .map_err(|_| SearcherError::IndexEditionError);
+        });
         Ok(Self {
             writer: Mutex::new(Some(writer)),
             reader: index
