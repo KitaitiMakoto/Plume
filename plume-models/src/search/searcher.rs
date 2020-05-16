@@ -132,9 +132,8 @@ impl Searcher {
         let mut writer = index
             .writer(50_000_000)
             .map_err(|_| SearcherError::WriteLockAcquisitionError)?;
-        // writer
-        //     .garbage_collect_files()
-        //     .map_err(|_| SearcherError::IndexEditionError)?;
+        let _ = writer
+            .garbage_collect_files();
         Ok(Self {
             writer: Mutex::new(Some(writer)),
             reader: index
