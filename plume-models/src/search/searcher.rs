@@ -2,13 +2,14 @@ use crate::{
     instance::Instance,
     posts::Post,
     schema::posts,
-    search::{query::PlumeQuery, tokenizer},
+    search::{query::PlumeQuery},
     tags::Tag,
     Connection, Result,
 };
 use chrono::Datelike;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use itertools::Itertools;
+use lindera_tantivy::tokenizer::LinderaTokenizer;
 use std::{cmp, fs::create_dir_all, path::Path, sync::Mutex};
 use tantivy::{
     collector::TopDocs, directory::MmapDirectory, schema::*, tokenizer::*, Index, IndexReader,
@@ -71,13 +72,13 @@ impl Searcher {
     }
 
     pub fn create(path: &dyn AsRef<Path>) -> Result<Self> {
-        let whitespace_tokenizer = tokenizer::WhitespaceTokenizer.filter(LowerCaser);
-
-        let content_tokenizer = SimpleTokenizer
+        let content_tokenizer = TextAnalyzer::from(SimpleTokenizer)
             .filter(RemoveLongFilter::limit(40))
             .filter(LowerCaser);
 
-        let property_tokenizer = NgramTokenizer::new(2, 8, false).filter(LowerCaser);
+        let property_tokenizer = TextAnalyzer::from(NgramTokenizer::new(2, 8, false)).filter(LowerCaser);
+
+        let japanese_tokenizer = LinderaTokenizer::new("decompose", "");
 
         let schema = Self::schema();
 
@@ -90,8 +91,8 @@ impl Searcher {
 
         {
             let tokenizer_manager = index.tokenizers();
-            tokenizer_manager.register("whitespace_tokenizer", whitespace_tokenizer);
-            tokenizer_manager.register("content_tokenizer", content_tokenizer);
+            tokenizer_manager.register("whitespace_tokenizer", japanese_tokenizer.clone());
+            tokenizer_manager.register("content_tokenizer", japanese_tokenizer);
             tokenizer_manager.register("property_tokenizer", property_tokenizer);
         } //to please the borrow checker
         Ok(Self {
@@ -110,13 +111,13 @@ impl Searcher {
     }
 
     pub fn open(path: &dyn AsRef<Path>) -> Result<Self> {
-        let whitespace_tokenizer = tokenizer::WhitespaceTokenizer.filter(LowerCaser);
-
-        let content_tokenizer = SimpleTokenizer
+        let content_tokenizer = TextAnalyzer::from(SimpleTokenizer)
             .filter(RemoveLongFilter::limit(40))
             .filter(LowerCaser);
 
-        let property_tokenizer = NgramTokenizer::new(2, 8, false).filter(LowerCaser);
+        let property_tokenizer = TextAnalyzer::from(NgramTokenizer::new(2, 8, false)).filter(LowerCaser);
+
+        let japanese_tokenizer = LinderaTokenizer::new("decompose", "");
 
         let index =
             Index::open(MmapDirectory::open(path).map_err(|_| SearcherError::IndexOpeningError)?)
@@ -124,16 +125,16 @@ impl Searcher {
 
         {
             let tokenizer_manager = index.tokenizers();
-            tokenizer_manager.register("whitespace_tokenizer", whitespace_tokenizer);
+            tokenizer_manager.register("whitespace_tokenizer", japanese_tokenizer);
             tokenizer_manager.register("content_tokenizer", content_tokenizer);
             tokenizer_manager.register("property_tokenizer", property_tokenizer);
         } //to please the borrow checker
         let mut writer = index
             .writer(50_000_000)
             .map_err(|_| SearcherError::WriteLockAcquisitionError)?;
-        writer
-            .garbage_collect_files()
-            .map_err(|_| SearcherError::IndexEditionError)?;
+        // writer
+        //     .garbage_collect_files()
+        //     .map_err(|_| SearcherError::IndexEditionError)?;
         Ok(Self {
             writer: Mutex::new(Some(writer)),
             reader: index
