@@ -24,8 +24,8 @@ RUN cargo install cargo-web
 COPY . .
 
 RUN chmod a+x ./script/plume-front.sh && sleep 1 && ./script/plume-front.sh
-RUN cargo install --path ./ --force --no-default-features --features postgres
-RUN cargo install --path plume-cli --force --no-default-features --features postgres
+RUN cargo install --path ./ --force --no-default-features --features postgres,search-lindera
+RUN cargo install --path plume-cli --force --no-default-features --features postgres,search-lindera
 RUN cargo clean
 
 FROM debian:buster-slim
